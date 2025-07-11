@@ -1,0 +1,91 @@
+"""
+title: Custom Chunk RAG
+author: hyemin-oh
+date: 2025-07-09
+description: Custom RAG pipeline with multi-chunk support (256, 512, 1024)
+"""
+
+from typing import List, Union, Generator, Iterator
+from schemas import OpenAIChatMessage
+
+
+class Pipeline:
+    def __init__(self):
+        self.engines = {}
+
+    async def on_startup(self):
+        import os
+        from pathlib import Path
+        from llama_index.core import (
+            VectorStoreIndex,
+            StorageContext,
+            load_index_from_storage,
+            SimpleDirectoryReader,
+            ServiceContext,
+        )
+        from llama_index.core.node_parser import SentenceSplitter
+        from llama_index.embeddings.openai import OpenAIEmbedding
+
+        # Set API key
+        os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "your-key")
+
+        chunk_sizes = [256, 512, 1024]
+        document_path = "./data"
+        document_files = list(Path(document_path).glob("*.txt"))
+        if not document_files:
+            raise FileNotFoundError("No document found in ./data folder.")
+
+        # Load raw documents once
+        from llama_index.core.readers.file import SimpleDirectoryReader
+        documents = SimpleDirectoryReader(document_path).load_data()
+
+        for chunk_size in chunk_sizes:
+            index_dir = f"./indexes/chunk{chunk_size}"
+            Path(index_dir).mkdir(parents=True, exist_ok=True)
+
+            try:
+                storage_context = StorageContext.from_defaults(persist_dir=index_dir)
+                index = load_index_from_storage(storage_context)
+                print(f"Loaded existing index for chunk size {chunk_size}")
+            except Exception:
+                print(f"Building new index for chunk size {chunk_size}")
+                splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=20)
+                service_context = ServiceContext.from_defaults(
+                    embed_model=OpenAIEmbedding(), node_parser=splitter
+                )
+                index = VectorStoreIndex.from_documents(
+                    documents,
+                    service_context=service_context
+                )
+                index.storage_context.persist(persist_dir=index_dir)
+
+            self.engines[chunk_size] = index.as_query_engine(streaming=True)
+
+    async def on_shutdown(self):
+        pass
+
+    def extract_chunk_size(self, message: str) -> int:
+        import re
+        match = re.search(r"\[chunk:(\d+)]", message)
+        if match:
+            return int(match.group(1))
+        return 512  # Default chunk size
+
+    def pipe(
+        self, user_message: str, model_id: str, messages: List[dict], body: dict
+    ) -> Union[str, Generator, Iterator]:
+        chunk_size = self.extract_chunk_size(user_message)
+
+        if chunk_size not in self.engines:
+            return f"[Error] Chunk size {chunk_size} not supported. Use one of: {list(self.engines.keys())}"
+
+        engine = self.engines[chunk_size]
+        cleaned_message = user_message.replace(f"[chunk:{chunk_size}]", "").strip()
+        response = engine.query(cleaned_message)
+
+        return response.response_gen
+
+
+
+
+  
