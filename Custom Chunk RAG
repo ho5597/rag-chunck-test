@@ -1,0 +1,64 @@
+"""
+title: Custom Chunk RAG
+author: hyemin-oh
+version: 1.0
+license: MIT
+description: Custom RAG pipeline using in-memory knowledge and multiple chunk sizes.
+requirements: llama-index
+"""
+
+from typing import List, Union, Generator, Iterator
+from schemas import OpenAIChatMessage
+
+class Pipeline:
+    def __init__(self):
+        self.engines = {}
+
+    async def on_startup(self):
+        import os
+        from llama_index.core import VectorStoreIndex, ServiceContext
+        from llama_index.core.schema import Document
+        from llama_index.core.node_parser import SentenceSplitter
+        from llama_index.embeddings.openai import OpenAIEmbedding
+
+        # Set your OpenAI API key
+        os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "your-key")
+
+        # Replace this with your real lecture note
+        lecture_text = """
+        Newton's First Law states that an object remains at rest or in uniform motion unless acted upon by a force.
+        Newton's Second Law relates force, mass, and acceleration: F = ma.
+        Newton's Third Law says every action has an equal and opposite reaction.
+        These laws form the foundation of classical mechanics.
+        """
+
+        document = Document(text=lecture_text)
+
+        for chunk_size in [256, 512, 1024]:
+            splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=20)
+            service_context = ServiceContext.from_defaults(
+                embed_model=OpenAIEmbedding(), node_parser=splitter
+            )
+            index = VectorStoreIndex.from_documents(
+                [document], service_context=service_context
+            )
+            self.engines[chunk_size] = index.as_query_engine(streaming=True)
+
+    async def on_shutdown(self):
+        pass
+
+    def extract_chunk_size(self, message: str) -> int:
+        import re
+        match = re.search(r"\[chunk:(\d+)]", message)
+        return int(match.group(1)) if match else 512
+
+    def pipe(
+        self, user_message: str, model_id: str, messages: List[dict], body: dict
+    ) -> Union[str, Generator, Iterator]:
+        chunk_size = self.extract_chunk_size(user_message)
+        if chunk_size not in self.engines:
+            return f"[Error] Invalid chunk size. Use one of: {list(self.engines.keys())}"
+        engine = self.engines[chunk_size]
+        cleaned = user_message.replace(f"[chunk:{chunk_size}]", "").strip()
+        response = engine.query(cleaned)
+        return response.response_gen
