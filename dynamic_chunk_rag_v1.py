@@ -3,7 +3,7 @@ title: Dynamic Chunk RAG with Proportional Overlap
 author: hyemin-oh
 version: 1.1
 license: MIT
-description: Use WebUI knowledge with dynamic chunk size and overlap (20% of chunk).
+description: Use WebUI knowledge with dynamic chunk size.
 requirements: llama-index
 """
 
