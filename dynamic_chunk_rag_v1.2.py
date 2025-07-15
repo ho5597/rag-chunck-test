@@ -1,9 +1,9 @@
 """
-title: Dynamic Chunk RAG with Proportional Overlap
+title: Dynamic Chunk RAG
 author: hyemin-oh
-version: 1.1
+version: 1.2
 license: MIT
-description: Use WebUI knowledge with dynamic chunk size.
+description: Use Open WebUI knowledge with dynamic chunk size control in the user prompt and test with unicorn message.
 requirements: llama-index
 """
 
@@ -16,6 +16,7 @@ class Pipeline:
 
     async def on_startup(self):
         import os
+        # Automatically read from server environment
         os.environ["OPENAI_API_KEY"] = os.getenv("OPENAI_API_KEY", "")
 
     async def on_shutdown(self):
@@ -24,14 +25,10 @@ class Pipeline:
     def extract_chunk_size(self, message: str) -> int:
         import re
         match = re.search(r"\[chunk:(\d+)]", message)
-        return int(match.group(1)) if match else 512
+        return int(match.group(1)) if match else 512  # Default to 512 if not specified
 
     def pipe(
-        self,
-        user_message: str,
-        model_id: str,
-        messages: List[dict],
-        body: dict
+        self, user_message: str, model_id: str, messages: List[dict], body: dict
     ) -> Union[str, Generator, Iterator]:
         import re, math
         from llama_index.core import VectorStoreIndex, ServiceContext
@@ -39,31 +36,30 @@ class Pipeline:
         from llama_index.core.schema import Document
         from llama_index.embeddings.openai import OpenAIEmbedding
 
-        # 1. Extract chunk size
+        # 1. Extract chunk size from user prompt
         chunk_size = self.extract_chunk_size(user_message)
-        overlap = max(1, math.floor(chunk_size * 0.15))
-
-        # 2. Clean query text
         query_text = re.sub(r"\[chunk:\d+]", "", user_message).strip()
 
-        # 3. Load selected knowledge
+        # 2. Get knowledge data passed from WebUI
         knowledge = body.get("knowledge", [])
         if not knowledge:
-            return "[Error] No knowledge selected. Please pick document(s) in WebUI."
+            return "[Error] No knowledge provided from WebUI. Please select a document in the workspace."
 
-        docs = [Document(text=item["content"], metadata=item.get("meta", {})) 
-                for item in knowledge]
+        # 3. Convert WebUI documents into LlamaIndex documents
+        docs = [Document(text=item["content"], metadata=item.get("meta", {})) for item in knowledge]
 
-        # 4. Build index with dynamic overlap
-        splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=overlap)
+        # 4. Build the custom index with given chunk size and 20% overlap
+        chunk_overlap = max(1, math.floor(chunk_size * 0.2))
+        splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
         service_context = ServiceContext.from_defaults(
             embed_model=OpenAIEmbedding(),
             node_parser=splitter
         )
         index = VectorStoreIndex.from_documents(docs, service_context=service_context)
 
-        # 5. Retrieve answer
-        query_engine = index.as_query_engine(streaming=True)
+        # 5. Query and modify the response
+        query_engine = index.as_query_engine(streaming=False)
         response = query_engine.query(query_text)
 
-        return response.response_gen
+        # 6. Add test string
+        return response.response + "\n\n🦄 Unicorn does exist!"
