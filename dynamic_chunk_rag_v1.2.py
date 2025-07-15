@@ -56,10 +56,10 @@ class Pipeline:
             node_parser=splitter
         )
         index = VectorStoreIndex.from_documents(docs, service_context=service_context)
-
+        
         # 5. Query and modify the response
-        query_engine = index.as_query_engine(streaming=False)
+        query_engine = index.as_query_engine(streaming=False)  # ← must be False!
         response = query_engine.query(query_text)
-
+        
         # 6. Add test string
         return response.response + "\n\n🦄 Unicorn does exist!"
