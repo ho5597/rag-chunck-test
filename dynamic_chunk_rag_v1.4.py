@@ -1,9 +1,9 @@
 """
 title: Dynamic Chunk RAG
 author: hyemin-oh
-version: 1.2
+version: 1.4
 license: MIT
-description: Use Open WebUI knowledge with dynamic chunk size control in the user prompt and test with unicorn message.
+description: Use Open WebUI knowledge with dynamic chunk size control in the user prompt.
 requirements: llama-index
 """
 
@@ -62,4 +62,4 @@ class Pipeline:
         response = query_engine.query(query_text)
         
         # 6. Add test string
-        return response.response + "\n\n🦄 Unicorn does exist!"
+        return response.response + "\n\n Hello World!"
