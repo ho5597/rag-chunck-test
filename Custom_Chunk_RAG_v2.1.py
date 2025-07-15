@@ -1,7 +1,7 @@
 """
 title: Multi-Chunk Knowledge RAG Pipeline
 author: your-name
-version: 2.0
+version: 2.1
 license: MIT
 description: A RAG pipeline that chunks uploaded knowledge files into 3 sizes (256, 512, 1024) with 15% overlap and selects the most relevant at query time.
 requirements: llama-index, llama-index-embeddings-openai
@@ -25,13 +25,15 @@ class Pipeline:
 
         os.environ["OPENAI_API_KEY"] = "your-api-key-here"
 
+        # Fetch knowledge files uploaded via Workspace > Knowledge
         knowledge_files = await context.get_knowledge_files()
         self.indexes = {}
 
         for file in knowledge_files:
-            # file.name = original filename like "Mechanics and Wave lec 1"
-            # file.get_content() = raw string content
             content = await file.get_content()
+            if not content:
+                continue  # skip empty files
+
             doc = Document(text=content)
 
             for chunk_size in self.chunk_sizes:
@@ -51,6 +53,9 @@ class Pipeline:
     ) -> Union[str, Generator, Iterator]:
         from llama_index.core.retrievers import VectorIndexRetriever
         from llama_index.embeddings.openai import OpenAIEmbedding
+
+        if not self.indexes:
+            return "No indexed knowledge available. Please upload documents in the Knowledge tab."
 
         embed_model = OpenAIEmbedding()
         query_vector = embed_model.get_query_embedding(user_message)
