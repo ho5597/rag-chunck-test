@@ -1,9 +1,6 @@
 """
 title: Llama Index Multi-Chunk Pipeline
-author: open-webui
-date: 2025-07-15
 version: 2.3
-license: MIT
 description: A pipeline for retrieving relevant information from a knowledge base using Llama Index, supporting multiple chunk sizes with dynamic overlap.
 requirements: llama-index
 """
