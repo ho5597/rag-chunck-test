@@ -24,7 +24,7 @@ class Pipeline:
 
     async def on_startup(self):
         os.environ["OPENAI_API_KEY"] = "your-api-key-here" 
-        knowledge_base_path = "./data/collections/" 
+        knowledge_base_path = "./workspace/knowledge/" 
         
         # Verify the path exists before trying to read from it
         if not os.path.isdir(knowledge_base_path):
